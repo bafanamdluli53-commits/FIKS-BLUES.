@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>ProTrade Analytics Elite</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-primary: #0a0e1a; --bg-secondary: #111827; --bg-tertiary: #1f2937;
+            --accent-green: #10b981; --accent-red: #ef4444; --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6; --text-primary: #f9fafb; --text-secondary: #9ca3af;
+            --glass-bg: rgba(17, 24, 39, 0.9); --glass-border: rgba(255, 255, 255, 0.1);
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-primary); color: var(--text-primary); margin: 0; overflow-x: hidden; }
+        header { background: var(--glass-bg); backdrop-filter: blur(10px); padding: 1rem; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--glass-border); }
+        .container { padding: 1rem; max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; }
+        
+        .panel { background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--glass-border); margin-bottom: 1rem; }
+        .chart-container { height: 400px; position: relative; }
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-tertiary); padding: 1rem; border-radius: 10px; border-left: 4px solid var(--accent-blue); }
+        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+        .stat-value { font-size: 1.25rem; font-weight: bold; margin-top: 5px; }
+
+        /* Buttons */
+        .btn { border: none; padding: 0.8rem; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; color: white; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .btn-success { background: var(--accent-green); }
+        .btn-danger { background: var(--accent-red); }
+        .btn-secondary { background: var(--bg-tertiary); }
+
+        /* Sidebar Signals */
+        .signal-list { max-height: 500px; overflow-y: auto; }
+        .signal-item { padding: 10px; border-radius: 8px; background: var(--bg-tertiary); margin-bottom: 10px; border-left: 4px solid #ccc; }
+        .signal-item.buy { border-color: var(--accent-green); }
+        .signal-item.sell { border-color: var(--accent-red); }
+
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+        
+        /* Mobile Loading Overlay */
+        #loadingOverlay { position: fixed; inset: 0; background: var(--bg-primary); z-index: 9999; display: flex; align-items: center; justify-content: center; visibility: hidden; opacity: 0; transition: 0.3s; }
+        #loadingOverlay.active { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div id="loadingOverlay">
+        <div style="text-align: center;">
+            <i class="fas fa-circle-notch fa-spin fa-3x" style="color: var(--accent-blue);"></i>
+            <p>Syncing with Binance...</p>
+        </div>
+    </div>
+
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 1.2rem; font-weight: bold;"><i class="fas fa-chart-line"></i> ProTrade <span style="color: var(--accent-blue);">Elite</span></div>
+            <input type="text" id="symbolInput" value="BTCUSDT" style="background: var(--bg-tertiary); color: white; border: 1px solid var(--glass-border); padding: 5px 10px; border-radius: 5px; width: 100px;">
+            <button onclick="app.analyze()" class="btn btn-secondary" style="padding: 5px 15px;">Analyze</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <main>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Price</div>
+                    <div id="currentPrice" class="stat-value">--</div>
+                </div>
+                <div class="stat-card" style="border-color: var(--accent-purple);">
+                    <div class="stat-label">P&L (Sim)</div>
+                    <div id="pnlDisplay" class="stat-value">--</div>
+                </div>
+                <div class="stat-card" style="border-color: var(--accent-green);">
+                    <div class="stat-label">Wallet</div>
+                    <div id="walletDisplay" class="stat-value">$10,000</div>
+                </div>
+            </div>
+
+            <div class="panel chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </main>
+
+        <aside class="sidebar">
+            <div class="panel">
+                <div style="margin-bottom: 10px; font-weight: bold;">Trading Desk</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button class="btn btn-success" onclick="app.executeTrade('buy')">BUY</button>
+                    <button class="btn btn-danger" onclick="app.executeTrade('sell')">SELL</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div style="margin-bottom: 10px; font-weight: bold;">Market Signals</div>
+                <div id="signalList" class="signal-list"></div>
+                <button class="btn btn-secondary" onclick="app.exportToCSV()" style="width: 100%; margin-top: 10px;">Export CSV</button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const app = {
+            charts: {},
+            wallet: JSON.parse(localStorage.getItem('p_wallet')) || { balance: 10000, position: null },
+            signalHistory: JSON.parse(localStorage.getItem('p_signals')) || [],
+
+            async init() {
+                this.initCharts();
+                this.signalHistory.forEach(s => this.renderSignalUI(s));
+                this.updateWalletUI();
+                await this.analyze();
+                setInterval(() => this.analyze(), 10000); // Auto-refresh every 10s
+            },
+
+            initCharts() {
+                const ctx = document.getElementById('priceChart').getContext('2d');
+                this.charts.price = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: [], datasets: [
+                        { label: 'Price', data: [], borderColor: '#3b82f6', tension: 0.2, pointRadius: 0, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                        { label: 'EMA 9', data: [], borderColor: '#8b5cf6', borderWidth: 1, pointRadius: 0 }
+                    ]},
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#374151' } } } }
+                });
+            },
+
+            async analyze() {
+                const symbol = document.getElementById('symbolInput').value.toUpperCase();
+                try {
+                    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=50`);
+                    const data = await res.json();
+                    const prices = data.map(d => parseFloat(d[4]));
+                    const lastPrice = prices[prices.length - 1];
+
+                    const ema9 = this.calcEMA(prices, 9);
+                    this.updateChart(prices, ema9);
+                    this.checkSignals(symbol, prices, ema9);
+                    
+                    document.getElementById('currentPrice').innerText = `$${lastPrice.toLocaleString()}`;
+                    this.updateWalletUI();
+                } catch (e) { console.error(e); }
+            },
+
+            calcEMA(data, p) {
+                const k = 2 / (p + 1);
+                let ema = [data[0]];
+                for (let i = 1; i < data.length; i++) ema.push(data[i] * k + ema[i-1] * (1 - k));
+                return ema;
+            },
+
+            updateChart(prices, ema) {
+                this.charts.price.data.labels = prices.map((_, i) => i);
+                this.charts.price.data.datasets[0].data = prices;
+                this.charts.price.data.datasets[1].data = ema;
+                this.charts.price.update('none');
+            },
+
+            checkSignals(symbol, prices, ema) {
+                const cur = prices[prices.length - 1];
+                const prev = prices[prices.length - 2];
+                const cEma = ema[ema.length - 1];
+
+                if (prev < cEma && cur > cEma) this.logSignal(symbol, 'buy', cur, 'EMA Cross Up');
+                if (prev > cEma && cur < cEma) this.logSignal(symbol, 'sell', cur, 'EMA Cross Down');
+            },
+
+            logSignal(symbol, type, price, reason) {
+                if(this.signalHistory[0]?.price === price) return;
+                const sig = { symbol, type, price, reason, time: new Date().toLocaleTimeString() };
+                this.signalHistory.unshift(sig);
+                if(this.signalHistory.length > 20) this.signalHistory.pop();
+                localStorage.setItem('p_signals', JSON.stringify(this.signalHistory));
+                this.renderSignalUI(sig);
+            },
+
+            renderSignalUI(s) {
+                const list = document.getElementById('signalList');
+                const html = `<div class="signal-item ${s.type}"><strong>${s.type.toUpperCase()}</strong> ${s.symbol}<br><small>$${s.price} | ${s.time}</small></div>`;
+                list.insertAdjacentHTML('afterbegin', html);
+            },
+
+            executeTrade(type) {
+                const price = parseFloat(document.getElementById('currentPrice').innerText.replace(/[^0-9.]/g, ''));
+                if (type === 'buy' && !this.wallet.position) {
+                    this.wallet.position = { entry: price, qty: 2000 / price };
+                    this.wallet.balance -= 2000;
+                } else if (type === 'sell' && this.wallet.position) {
+                    this.wallet.balance += (this.wallet.position.qty * price);
+                    this.wallet.position = null;
+                }
+                localStorage.setItem('p_wallet', JSON.stringify(this.wallet));
+                this.updateWalletUI();
+            },
+
+            updateWalletUI() {
+                const price = parseFloat(document.getElementById('currentPrice').innerText.replace(/[^0-9.]/g, ''));
+                document.getElementById('walletDisplay').innerText = `$${this.wallet.balance.toFixed(2)}`;
+                if (this.wallet.position) {
+                    const pnl = (price - this.wallet.position.entry) * this.wallet.position.qty;
+                    document.getElementById('pnlDisplay').innerText = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+                    document.getElementById('pnlDisplay').style.color = pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                } else {
+                    document.getElementById('pnlDisplay').innerText = "$0.00";
+                }
+            },
+
+            exportToCSV() {
+                let csv = "Time,Symbol,Type,Price,Reason\n" + this.signalHistory.map(s => `${s.time},${s.symbol},${s.type},${s.price},${s.reason}`).join("\n");
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'trades.csv'; a.click();
+            }
+        };
+
+        window.onload = () => app.init();
+    </script>
+</body>
+</html>
